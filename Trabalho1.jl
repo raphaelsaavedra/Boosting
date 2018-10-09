@@ -1,3 +1,4 @@
+
 using RCall, DataFrames
 
 """Load characters data"""
@@ -5,7 +6,7 @@ function initialize(label_a::Int, label_b::Int)::Tuple{DataFrames.DataFrame,Data
     @rput label_a
     @rput label_b
     R"""
-    load('mnist_train.rda')
+    load('C:/Users/Thiago/Desktop/Estudos/AlgoritmosEIncerteza/mnist_train.rda')
     mnist = subset(mnist_train, mnist_train[,1] %in% c(label_a, label_b))
     mnist_means = aggregate(mnist[,-1], by = list(mnist[,1]), FUN = mean)
     """
@@ -53,6 +54,12 @@ function main(label_a::Int, label_b::Int, ϵ::Float64, γ::Float64)
     corrects = falses(n)
     labels = Vector{Int}(n)
     labels_per_classifier = Matrix{Int}(n, T)
+    correct_final_label = mnist[:X5]
+    final_label = Vector{Int64}(n);
+    acertos = falses(n)
+    percentual_acertos = zeros(T)
+    count_base_classifiers = zeros(d-1)
+
     for t in 1:T
         j = 1
         soma = 0.0
@@ -72,6 +79,7 @@ function main(label_a::Int, label_b::Int, ϵ::Float64, γ::Float64)
                 warn("No valid weak learner found for iteration ", t)
             end
         end
+        count_base_classifiers[j] = count_base_classifiers[j] + 1
         labels_per_classifier[:, t] = labels
         # Found weak learner corresponding to j-th baseClassifier
         # Update weights
@@ -79,24 +87,25 @@ function main(label_a::Int, label_b::Int, ϵ::Float64, γ::Float64)
             w[i] = w[i] * exp(η * !corrects[i]) # Increase weights for those that were wrongly classified
         end
         p = w / sum(w)
+        for i in 1:n
+            final_label[i] = findMostCommon(labels_per_classifier[i,1:t], label_a, label_b)
+            acertos[i] = final_label[i] == correct_final_label[i]
+        end
+        
+        percentual_acertos[t] = sum(acertos)/length(acertos)
+        
         if t % 10 == 0
             info("t = ", t, " of ", T)
+            info("Correct ratio: ", percentual_acertos[t])
+        end
+        if percentual_acertos[t] > 1-ϵ
+          return percentual_acertos, count_base_classifiers
         end
     end
-
-    correct_final_label = mnist[:X5]
-    final_label = Vector{Int64}(n);
-    acertos = falses(n)
-    for i in 1:n
-        final_label[i] = findMostCommon(labels_per_classifier[i,:], label_a, label_b)
-        acertos[i] = final_label[i] == correct_final_label[i]
-    end
-
-    percentual_acertos = sum(acertos)/length(acertos)
-    info("Correct ratio: ", percentual_acertos)
+    return percentual_acertos, count_base_classifiers
 end
 
-@time main(0, 1, 0.2, 0.1)
+@time a, b = main(4, 8, 0.025, 0.05)
 
-# Retornar tambem as outras coisas que pede no trabalho
-# Ao inves de rodar o loop ate T necessariamente, posso rodar um while so enquanto o percentual de acertos nao for alcançado
+using JLD
+JLD.save("C:/Users/Thiago/Desktop/Estudos/AlgoritmosEIncerteza/teste.jld", "a", a, "b", b)
