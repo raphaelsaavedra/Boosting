@@ -1,4 +1,3 @@
-
 using RCall, DataFrames
 
 """Load characters data"""
@@ -6,7 +5,7 @@ function initialize(label_a::Int, label_b::Int)::Tuple{DataFrames.DataFrame,Data
     @rput label_a
     @rput label_b
     R"""
-    load('C:/Users/Thiago/Desktop/Estudos/AlgoritmosEIncerteza/mnist_train.rda')
+    load('./mnist_train.rda')
     mnist = subset(mnist_train, mnist_train[,1] %in% c(label_a, label_b))
     mnist_means = aggregate(mnist[,-1], by = list(mnist[,1]), FUN = mean)
     """
@@ -56,23 +55,23 @@ function main(label_a::Int, label_b::Int, ϵ::Float64, γ::Float64)
     labels_per_classifier = Matrix{Int}(n, T)
     correct_final_label = mnist[:X5]
     final_label = Vector{Int64}(n);
-    acertos = falses(n)
-    percentual_acertos = zeros(T)
+    hits = falses(n)
+    percent_hits = zeros(T)
     count_base_classifiers = zeros(d-1)
 
     for t in 1:T
         j = 1
-        soma = 0.0
-        while soma < 0.5 + γ
+        S = 0.0
+        while S < 0.5 + γ
             p = w / sum(w)
-            soma = 0.0
+            S = 0.0
             for i in 1:n
                 label, correct_label = baseClassifier_j(mnist_means, Int64(mnist[i, j + 1]), j + 1, Int64(mnist[i, 1]))
                 labels[i] = label
                 corrects[i] = correct_label
             end
 
-            soma = sum(p .* corrects)
+            S = sum(p .* corrects)
 
             j += 1
             if j > d
@@ -89,23 +88,18 @@ function main(label_a::Int, label_b::Int, ϵ::Float64, γ::Float64)
         p = w / sum(w)
         for i in 1:n
             final_label[i] = findMostCommon(labels_per_classifier[i,1:t], label_a, label_b)
-            acertos[i] = final_label[i] == correct_final_label[i]
+            hits[i] = final_label[i] == correct_final_label[i]
         end
         
-        percentual_acertos[t] = sum(acertos)/length(acertos)
+        percent_hits[t] = sum(hits)/length(hits)
         
         if t % 10 == 0
             info("t = ", t, " of ", T)
-            info("Correct ratio: ", percentual_acertos[t])
+            info("Correct ratio: ", percent_hits[t])
         end
-        if percentual_acertos[t] > 1-ϵ
-          return percentual_acertos, count_base_classifiers
+        if percent_hits[t] > 1-ϵ
+          return percent_hits, count_base_classifiers
         end
     end
-    return percentual_acertos, count_base_classifiers
+    return percentual_hits, count_base_classifiers
 end
-
-@time a, b = main(4, 8, 0.025, 0.05)
-
-using JLD
-JLD.save("C:/Users/Thiago/Desktop/Estudos/AlgoritmosEIncerteza/teste.jld", "a", a, "b", b)
